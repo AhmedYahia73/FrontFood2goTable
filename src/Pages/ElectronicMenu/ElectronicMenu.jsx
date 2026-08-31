@@ -49,7 +49,7 @@ const ElectronicMenu = () => {
         } else if (activeCategory === 'offers') {
             url = `${apiUrl}/customer/home/discount_product?locale=${selectedLanguage}`;
         } else {
-            url = `${apiUrl}/customer/home/products_in_category/${activeCategory}?locale=${selectedLanguage}`;
+            url = `${apiUrl}/customer/home/products_in_category_pos/${activeCategory}?locale=${selectedLanguage}`;
         }
 
         return url;

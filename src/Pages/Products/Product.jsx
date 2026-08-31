@@ -41,7 +41,7 @@ const Products = () => {
   // Build API URL for products
   const buildProductsUrl = useCallback(() => {
     if (!selectedCategory) return null;
-    let url = `${apiUrl}/customer/home/products_in_category/${selectedCategory}?locale=${selectedLanguage}`;
+    let url = `${apiUrl}/customer/home/products_in_category_pos/${selectedCategory}?locale=${selectedLanguage}`;
     if (tableId) {
       url += `&table_id=${tableId}`;
     }

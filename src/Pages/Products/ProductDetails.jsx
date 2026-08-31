@@ -208,10 +208,19 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
     return productDetails.allExtras.filter((extra) => isExtraAvailable(extra));
   };
 
-  const calculateTotalPrice = () => {
-    if (!productDetails) return parseFloat(product.final_price || product.price_after_tax || product.price_after_discount || product.price || 0) * quantity;
+  const isTaxIncluded = (productDetails || product)?.taxes?.setting === 'included' || (productDetails || product)?.tax_obj?.setting === 'included';
 
-    let baseUnitPrice = parseFloat(productDetails.final_price || productDetails.price_after_tax || productDetails.price_after_discount || productDetails.price || 0);
+  const getDisplayPrice = (entity) => {
+    if (isTaxIncluded) {
+      return parseFloat(entity?.final_price || entity?.price_after_tax || entity?.price_after_discount || entity?.price || 0);
+    }
+    return parseFloat(entity?.price_after_discount || entity?.price || entity?.final_price || 0);
+  };
+
+  const calculateTotalPrice = () => {
+    if (!productDetails) return getDisplayPrice(product) * quantity;
+
+    let baseUnitPrice = getDisplayPrice(productDetails);
     let variationPrice = 0;
 
     // Add variation prices
@@ -221,7 +230,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
           const option = productDetails.variations
             ?.flatMap((v) => v.options)
             ?.find((o) => String(o.id) === String(optionId));
-          if (option) variationPrice += parseFloat(option.final_price || option.price_after_tax || option.price || 0);
+          if (option) variationPrice += getDisplayPrice(option);
         });
       } else if (optionIds) {
         const optionId = typeof optionIds === 'object' ? optionIds.optionId : optionIds;
@@ -229,7 +238,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
         const option = productDetails.variations
           ?.flatMap((v) => v.options)
           ?.find((o) => String(o.id) === String(optionId));
-        if (option) variationPrice += parseFloat(option.final_price || option.price_after_tax || option.price || 0) * weightMultiplier;
+        if (option) variationPrice += getDisplayPrice(option) * weightMultiplier;
       }
     });
 
@@ -241,7 +250,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
         const addon = productDetails.addons?.find((a) => String(a.id) === String(addonId));
         if (addon) {
           const addonQty = addonData.quantity || 1;
-          total += parseFloat(addon.final_price || addon.price_after_tax || addon.price_after_discount || addon.price || 0) * addonQty;
+          total += getDisplayPrice(addon) * addonQty;
         }
       }
     });
@@ -250,7 +259,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
     Object.entries(selectedExtras).forEach(([extraId, extraQty]) => {
       const extra = [...(productDetails.allExtras || []), ...(productDetails.addons || [])]?.find((e) => String(e.id) === String(extraId));
       if (extra && extraQty > 0 && isExtraAvailable(extra)) {
-        total += parseFloat(extra.final_price || extra.price_after_tax || extra.price_after_discount || extra.price || 0) * extraQty * quantity;
+        total += getDisplayPrice(extra) * extraQty * quantity;
       }
     });
 
@@ -468,13 +477,18 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
                   </span>
                 )}
                 <span className="text-lg font-bold text-mainColor">
-                  {displayData.price_after_discount || displayData.price} {t('egp')}
+                  {getDisplayPrice(displayData)} {t('egp')}
                 </span>
               </div>
             </div>
             {taxSetting === 'included' && displayData.tax_val > 0 && (
               <div className="mt-1 text-sm text-gray-600">
                 {t('taxIncluded')}: {displayData.tax_val} {t('egp')}
+              </div>
+            )}
+            {taxSetting === 'excluded' && displayData.tax_val > 0 && (
+              <div className="mt-1 text-sm text-gray-600">
+                {t('TaxExcluded')}: +{displayData.tax_val} {t('egp')}
               </div>
             )}
           </div>
@@ -515,9 +529,9 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
                     >
                       <div className="flex items-center gap-3">
                         <span className={isSelected ? 'font-medium' : ''}>{option.name}</span>
-                        {(option.final_price || option.price_after_tax || option.price) > 0 && (
+                        {getDisplayPrice(option) > 0 && (
                           <span className="text-sm font-semibold text-mainColor">
-                            +{option.final_price || option.price_after_tax || option.price} {t('egp')}
+                            +{getDisplayPrice(option)} {t('egp')}
                           </span>
                         )}
                       </div>
@@ -589,7 +603,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
                           <span>{addon.name}</span>
                         </div>
                         <span className="font-semibold text-mainColor">
-                          +{addon.final_price || addon.price_after_tax || addon.price_after_discount || addon.price} {t('egp')}
+                          +{getDisplayPrice(addon)} {t('egp')}
                         </span>
                       </label>
                       {currentAddon?.checked && (
@@ -649,7 +663,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
                             </span>
                           )}
                           <span className="font-semibold text-mainColor">
-                            +{extra.final_price || extra.price_after_tax || extra.price_after_discount || extra.price} {t('egp')}
+                            +{getDisplayPrice(extra)} {t('egp')}
                           </span>
                         </div>
                       </div>
@@ -751,7 +765,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
             {calculateTotalTax() > 0 && (
               <div className="flex items-center justify-between mt-1 text-xs text-gray-600 border-t border-mainColor/20 pt-1.5">
                 <span>{t('price')}: {(calculateTotalPrice() - calculateTotalTax()).toFixed(2)} {t('egp')}</span>
-                <span>{t('taxIncluded') || 'Tax Included'}: +{calculateTotalTax().toFixed(2)} {t('egp')}</span>
+                <span>{taxSetting === 'included' ? t('taxIncluded') : t('TaxExcluded')}: {calculateTotalTax().toFixed(2)} {t('egp')}</span>
               </div>
             )}
           </div>
