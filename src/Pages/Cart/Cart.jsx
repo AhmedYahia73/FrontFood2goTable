@@ -118,24 +118,6 @@ const Cart = () => {
     }
   }, [cart, taxSysType]);
 
-
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 text-center min-h-96">
-        <ShoppingCart className="w-24 h-24 mb-6 text-gray-300" />
-        <h3 className="mb-2 text-xl font-semibold text-gray-600">{t("YourCartIsEmpty")}</h3>
-        <p className="mb-6 text-gray-500">{t("AddSomeDeliciousItemsToGetStarted")}</p>
-
-        <button
-          onClick={() => window.history.back()}
-          className="px-6 py-2 text-white transition-colors rounded-lg bg-mainColor hover:bg-mainColor/90"
-        >
-          {t("ContinueShopping")}
-        </button>
-      </div>
-    );
-  }
-
   const prepareOrderData = () => {
     // total from Redux is now accurate for both included and excluded taxes
     let totalAmount = orderSummary.total;
@@ -203,6 +185,23 @@ const Cart = () => {
     }
   }, [orderResponse, orderError, auth, t, dispatch]);
 
+  
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center min-h-96">
+        <ShoppingCart className="w-24 h-24 mb-6 text-gray-300" />
+        <h3 className="mb-2 text-xl font-semibold text-gray-600">{t("YourCartIsEmpty")}</h3>
+        <p className="mb-6 text-gray-500">{t("AddSomeDeliciousItemsToGetStarted")}</p>
+
+        <button
+          onClick={() => window.history.back()}
+          className="px-6 py-2 text-white transition-colors rounded-lg bg-mainColor hover:bg-mainColor/90"
+        >
+          {t("ContinueShopping")}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full p-4 md:p-6 xl:p-8">
