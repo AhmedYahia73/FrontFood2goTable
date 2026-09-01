@@ -208,7 +208,16 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
     return productDetails.allExtras.filter((extra) => isExtraAvailable(extra));
   };
 
-  const isTaxIncluded = (productDetails || product)?.taxes?.setting === 'included' || (productDetails || product)?.tax_obj?.setting === 'included';
+  const baseEntity = productDetails || product;
+  const isIncludedStr = (val) => typeof val === 'string' && val.toLowerCase() === 'included';
+  const isTaxIncluded = 
+    isIncludedStr(baseEntity?.taxes) || 
+    isIncludedStr(baseEntity?.taxes?.setting) || 
+    isIncludedStr(baseEntity?.tax_obj?.setting) ||
+    isIncludedStr(baseEntity?.tax?.setting) ||
+    isIncludedStr(baseEntity?.tax_type) ||
+    isIncludedStr(baseEntity?.tax_setting) ||
+    (parseFloat(baseEntity?.tax_val) > 0 && Math.abs(parseFloat(baseEntity?.price_after_tax || 0) - parseFloat(baseEntity?.price_after_discount || baseEntity?.after_disount || baseEntity?.final_price || 0)) < 0.01);
 
   const getDisplayPrice = (entity) => {
     if (isTaxIncluded) {
@@ -435,7 +444,7 @@ const ProductDetails = ({ product, onClose, language, showActions = true }) => {
 
   const displayData = productDetails || product;
   const availableExtras = getAvailableExtras();
-  const taxSetting = displayData.taxes?.setting || 'excluded';
+  const taxSetting = isTaxIncluded ? 'included' : 'excluded';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">

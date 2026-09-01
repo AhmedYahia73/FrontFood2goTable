@@ -45,9 +45,13 @@ const getTaxObj = (entity, fallback = null) =>
 // included: الضريبة مضمنة في السعر المعروض (لا تضاف للإجمالي)
 // excluded: الضريبة خارج السعر (تضاف للإجمالي)
 const calcTax = (price, taxObj) => {
+  if (taxObj === 'included') return { taxAmount: 0, isTaxIncluded: true };
+  if (taxObj === 'excluded') return { taxAmount: 0, isTaxIncluded: false };
   if (!taxObj || !parseFloat(taxObj.amount || 0)) return { taxAmount: 0, isTaxIncluded: false };
+  
   const rate = parseFloat(taxObj.amount);
-  const isTaxIncluded = taxObj.setting === 'included';
+  const isIncludedStr = (val) => typeof val === 'string' && val.toLowerCase() === 'included';
+  const isTaxIncluded = isIncludedStr(taxObj.setting);
   const type = taxObj.type;
   let taxAmount = 0;
   if (type === 'precentage' || type === 'percentage') {
@@ -109,7 +113,13 @@ const calculateItemTotal = (item) => {
   const product = item.product || {};
   const qty = parseFloat(item.quantity || 1);
   const taxObj = getTaxObj(product);
-  const isTaxIncluded = taxObj?.setting === 'included';
+  const isIncludedStr = (val) => typeof val === 'string' && val.toLowerCase() === 'included';
+  const isTaxIncluded = 
+    isIncludedStr(product?.taxes) || 
+    isIncludedStr(taxObj?.setting) ||
+    isIncludedStr(product?.tax_obj?.setting) ||
+    isIncludedStr(product?.tax?.setting) ||
+    (parseFloat(product?.tax_val) > 0 && Math.abs(parseFloat(product?.price_after_tax || 0) - parseFloat(product?.price_after_discount || product?.after_disount || product?.final_price || 0)) < 0.01);
 
   let baseUnitPrice = getDisplayPrice(product, isTaxIncluded);
   let variationPrice = 0;
@@ -152,20 +162,24 @@ const calculateItemTotal = (item) => {
   return total;
 };
 
-// ── Calculate tax details for an item ────────────────────────────────────────
+// ── Calculate item tax breakdown ─────────────────────────────────────────────
 const calculateItemTaxDetails = (product, variations, addons, extras, quantity = 1) => {
   const taxDetails = {
     productTax: 0, variationTax: 0, addonTax: 0, extraTax: 0,
     totalTax: 0, totalTaxIncluded: 0, totalTaxExcluded: 0,
     isTaxIncluded: false, taxBreakdown: []
   };
+
   if (!product) return taxDetails;
   const qty = parseFloat(quantity || 1);
   const productTaxObj = getTaxObj(product);
 
-  // 1. Product tax
+  const isIncludedStr = (val) => typeof val === 'string' && val.toLowerCase() === 'included';
+
+  // 1. Product Base Tax
   let pTaxAmount = parseFloat(product.tax_val || product.tax_only || 0);
-  let pIncluded = false;
+  let pIncluded = isIncludedStr(product?.taxes) || isIncludedStr(productTaxObj?.setting) || isIncludedStr(product?.tax_obj?.setting) ||
+    (parseFloat(product?.tax_val) > 0 && Math.abs(parseFloat(product?.price_after_tax || 0) - parseFloat(product?.price_after_discount || product?.after_disount || product?.final_price || 0)) < 0.01);
   if (pTaxAmount === 0 && productTaxObj?.amount) {
     const { taxAmount, isTaxIncluded } = calcTax(getBasePrice(product), productTaxObj);
     pTaxAmount = taxAmount;
@@ -181,7 +195,7 @@ const calculateItemTaxDetails = (product, variations, addons, extras, quantity =
   if (pIncluded) taxDetails.totalTaxIncluded += pTaxAmount * qty;
   else taxDetails.totalTaxExcluded += pTaxAmount * qty;
 
-  // 2. Variation taxes
+  // 2. Variations
   if (variations) {
     Object.values(variations).forEach(optionIds => {
       const opts = Array.isArray(optionIds) ? optionIds : [optionIds];
@@ -193,14 +207,15 @@ const calculateItemTaxDetails = (product, variations, addons, extras, quantity =
         if (option) {
           const optTaxObj = getTaxObj(option, productTaxObj);
           let t = parseFloat(option.tax_val || option.tax_only || 0);
-          let tInc = false;
+          let tInc = isIncludedStr(option?.taxes) || isIncludedStr(optTaxObj?.setting) || isIncludedStr(option?.tax_obj?.setting) ||
+            (parseFloat(option?.tax_val) > 0 && Math.abs(parseFloat(option?.price_after_tax || 0) - parseFloat(option?.price_after_discount || option?.after_disount || option?.final_price || 0)) < 0.01);
           if (t === 0 && optTaxObj?.amount) {
             const { taxAmount, isTaxIncluded } = calcTax(getBasePrice(option), optTaxObj);
             t = taxAmount; tInc = isTaxIncluded;
           }
           taxDetails.variationTax += t * weight * qty;
           taxDetails.taxBreakdown.push({
-            name: option.name, type: 'variation',
+            name: `${product.name} - ${option.name}`, type: 'variation',
             taxableAmount: getBasePrice(option) * weight * qty, taxAmount: t * weight * qty,
             taxRate: optTaxObj?.amount || 0, isTaxIncluded: tInc
           });
@@ -211,34 +226,35 @@ const calculateItemTaxDetails = (product, variations, addons, extras, quantity =
     });
   }
 
-  // 3. Addon taxes
+  // 3. Addons
   if (addons) {
     Object.entries(addons).forEach(([addonId, addonData]) => {
       if (addonData?.checked) {
         const addon = product.addons?.find(a => String(a.id) === String(addonId));
         if (addon) {
-          const aqty = parseFloat(addonData.quantity || 1);
+          const aQty = parseFloat(addonData.quantity || 1);
           const addonTaxObj = getTaxObj(addon, productTaxObj);
           let t = parseFloat(addon.tax_val || addon.tax_only || 0);
-          let tInc = false;
+          let tInc = isIncludedStr(addon?.taxes) || isIncludedStr(addonTaxObj?.setting) || isIncludedStr(addon?.tax_obj?.setting) ||
+            (parseFloat(addon?.tax_val) > 0 && Math.abs(parseFloat(addon?.price_after_tax || 0) - parseFloat(addon?.price_after_discount || addon?.after_disount || addon?.final_price || 0)) < 0.01);
           if (t === 0 && addonTaxObj?.amount) {
             const { taxAmount, isTaxIncluded } = calcTax(getBasePrice(addon), addonTaxObj);
             t = taxAmount; tInc = isTaxIncluded;
           }
-          taxDetails.addonTax += t * aqty;
+          taxDetails.addonTax += t * aQty;
           taxDetails.taxBreakdown.push({
-            name: addon.name, type: 'addon',
-            taxableAmount: getBasePrice(addon) * aqty, taxAmount: t * aqty,
+            name: `${product.name} - ${addon.name}`, type: 'addon',
+            taxableAmount: getBasePrice(addon) * aQty, taxAmount: t * aQty,
             taxRate: addonTaxObj?.amount || 0, isTaxIncluded: tInc
           });
-          if (tInc) taxDetails.totalTaxIncluded += t * aqty;
-          else taxDetails.totalTaxExcluded += t * aqty;
+          if (tInc) taxDetails.totalTaxIncluded += t * aQty;
+          else taxDetails.totalTaxExcluded += t * aQty;
         }
       }
     });
   }
 
-  // 4. Extra taxes
+  // 4. Extras (if taxable)
   if (extras) {
     Object.entries(extras).forEach(([extraId, extraQty]) => {
       const count = parseFloat(extraQty || 0);
@@ -248,7 +264,8 @@ const calculateItemTaxDetails = (product, variations, addons, extras, quantity =
         if (extra) {
           const extraTaxObj = getTaxObj(extra, productTaxObj);
           let t = parseFloat(extra.tax_val || extra.tax_only || 0);
-          let tInc = false;
+          let tInc = isIncludedStr(extra?.taxes) || isIncludedStr(extraTaxObj?.setting) || isIncludedStr(extra?.tax_obj?.setting) ||
+            (parseFloat(extra?.tax_val) > 0 && Math.abs(parseFloat(extra?.price_after_tax || 0) - parseFloat(extra?.price_after_discount || extra?.after_disount || extra?.final_price || 0)) < 0.01);
           if (t === 0 && extraTaxObj?.amount) {
             const { taxAmount, isTaxIncluded } = calcTax(getBasePrice(extra), extraTaxObj);
             t = taxAmount; tInc = isTaxIncluded;
